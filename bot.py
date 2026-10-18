@@ -1,96 +1,4 @@
-import os
-import threading
-import telebot
-from flask import Flask
-from telebot import types
-
-TOKEN = '8845810892:AAG8-L2XNFkbd177tw9i1GwIsfSjd-S5GQQ'
-bot = telebot.TeleBot(TOKEN)
-
-# Sizning Admin ID raqamingiz kiritildi:
-ADMIN_ID = 6042443325
-
-# Flask server
-app = Flask(__name__)
-
-
-@app.route('/')
-def home():
-  return 'Talim.Uz Boti Ishlayapti!'
-
-
-def run_flask():
-  port = int(os.environ.get('PORT', 10000))
-  app.run(host='0.0.0.0', port=port)
-
-
-# Foydalanuvchini faylga saqlash funksiyasi
-def save_user(user_id):
-  if not os.path.exists('users.txt'):
-    open('users.txt', 'w').close()
-
-  with open('users.txt', 'r+') as f:
-    users = f.read().splitlines()
-    if str(user_id) not in users:
-      f.write(f'{user_id}\n')
-
-
-# Jami foydalanuvchilar sonini olish
-def get_users_count():
-  if not os.path.exists('users.txt'):
-    return 0
-  with open('users.txt', 'r') as f:
-    users = f.read().splitlines()
-    return len(users)
-
-
-# /start buyrug'i
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-  try:
-    save_user(message.from_user.id)
-
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn_fanlar = types.KeyboardButton('📚 Fanlar')
-    btn_sertifikat = types.KeyboardButton('🏅 Milliy Sertifikatlar')
-    btn_cefr_ielts = types.KeyboardButton('🇬🇧 CEFR & IELTS')
-    btn_about = types.KeyboardButton('ℹ️ Biz haqimizda')
-
-    markup.add(btn_fanlar, btn_sertifikat, btn_cefr_ielts, btn_about)
-
-    welcome_text = (
-        f"Assalomu alaykum, {message.from_user.first_name}!\n\n"
-        "🎓 **Talim.Uz** ta'limiy botiga xush kelibsiz.\n\n"
-        "Quyidagi tugmalardan birini tanlang:"
-    )
-    bot.send_message(
-        message.chat.id,
-        welcome_text,
-        reply_markup=markup,
-        parse_mode='Markdown',
-    )
-  except Exception as e:
-    print(f'Xatolik /start da: {e}')
-
-
-# /stat buyrug'i - Faqat Admin uchun statistika
-@bot.message_handler(commands=['stat', 'stats'])
-def show_stats(message):
-  if message.from_user.id == ADMIN_ID:
-    count = get_users_count()
-    bot.send_message(
-        message.chat.id,
-        f'📊 **Bot Statistikasi:**\n\n👤 Jami foydalanuvchilar soni: **{count}**'
-        ' ta',
-        parse_mode='Markdown',
-    )
-  else:
-    bot.send_message(
-        message.chat.id, 'Siz ushbu buyruqdan foydalana olmaysiz.'
-    )
-
-
-# Matnli xabarlarga javob
+# Matnli xabarlarga javob (Asosiy tugmalar bosilganda)
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
   try:
@@ -122,24 +30,34 @@ def handle_messages(message):
       bot.send_message(
           message.chat.id,
           '🏅 **Milliy Sertifikatlar boʻlimi**\n\n'
-          "Bu yerda Matematika, Fizika va ona tili fanlaridan milliy"
-          " sertifikat imtihoni topshiruvchilar uchun testlar va"
+          'Bu yerda Milliy sertifikat imtihoni topshiruvchilar uchun testlar va'
           ' qoʻllanmalar joylab boriladi.',
       )
 
     elif text == '🇬🇧 CEFR & IELTS':
+      markup = types.InlineKeyboardMarkup(row_width=1)
+      btn_cefr = types.InlineKeyboardButton(
+          '📘 CEFR Qoʻllanma va Testlar', url='https://t.me/talim_rasmiy_uz/8'
+      )
+      btn_ielts = types.InlineKeyboardButton(
+          '📕 IELTS Oʻquv Materiallari', url='https://t.me/talim_rasmiy_uz/11'
+      )
+      markup.add(btn_cefr, btn_ielts)
+
       bot.send_message(
           message.chat.id,
           '🇬🇧 **CEFR & IELTS boʻlimi**\n\n'
-          'Ingliz tilidan B2 va C1 darajalarini olish uchun kerakli lugʻatlar'
-          ' hamda grammatik qoidalar toʻplami.',
+          'Kerakli boʻlim boʻyicha materiallarni yuklab olish uchun quyidagi'
+          ' tugmalardan birini tanlang:',
+          reply_markup=markup,
+          parse_mode='Markdown',
       )
 
     elif text == 'ℹ️ Biz haqimizda':
       bot.send_message(
           message.chat.id,
-          "ℹ️ **Talim.Uz** — oʻquvchilarga bepul ta'limiy resurslar yetkazib"
-          ' beruvchi platforma.',
+          "ℹ️ **Talim.Uz** — oʻquvchilarga bepul ta'limiy resurslar va"
+          ' darsliklar yetkazib beruvchi rasmiy bot.',
       )
 
     else:
@@ -152,41 +70,69 @@ def handle_messages(message):
     print(f'Xatolik matnda: {e}')
 
 
-# Inline tugmalar
+# Inline tugmalar (Fanlar ichi) bosilganda
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
   try:
     bot.answer_callback_query(call.id)
 
+    # 1. MATEMATIKA BOSILGANDA
     if call.data == 'math':
-      bot.send_message(
-          call.message.chat.id,
-          '📐 **Matematika:**\n\n- Algebra formulalari\n- Geometriya'
-          ' amaliyotlari\n- Testlar toʻplami',
+      text = (
+          '📐 **Matematika fanidan oʻquv materiallari:**\n\n'
+          'Quyidagi tugma orqali darslik va qoʻllanmalarni yuklab oling:'
       )
-    elif call.data == 'physics':
-      bot.send_message(
-          call.message.chat.id,
-          '⚡ **Fizika:**\n\n- Mexanika va dinamika\n- Elektr va magnetizm',
+      markup = types.InlineKeyboardMarkup()
+      btn = types.InlineKeyboardButton(
+          '📂 Matematika materiallarini yuklash',
+          url='https://t.me/talim_rasmiy_uz/4',
       )
+      markup.add(btn)
+      bot.send_message(
+          call.message.chat.id, text, reply_markup=markup, parse_mode='Markdown'
+      )
+
+    # 2. TARIX BOSILGANDA
     elif call.data == 'history':
-      bot.send_message(
-          call.message.chat.id,
-          '🏛 **Tarix:**\n\n- Oʻzbekiston tarixi\n- Jahon tarixi sanalari',
+      text = (
+          '🏛 **Tarix fanidan oʻquv materiallari:**\n\n'
+          'Quyidagi tugma orqali darslik va manbalarni yuklab oling:'
       )
+      markup = types.InlineKeyboardMarkup()
+      btn = types.InlineKeyboardButton(
+          '📂 Tarix materiallarini yuklash',
+          url='https://t.me/talim_rasmiy_uz/9?single',
+      )
+      markup.add(btn)
+      bot.send_message(
+          call.message.chat.id, text, reply_markup=markup, parse_mode='Markdown'
+      )
+
+    # 3. ONA TILI BOSILGANDA
     elif call.data == 'native':
-      bot.send_message(
-          call.message.chat.id,
-          '🇺🇿 **Ona tili:**\n\n- Grammatika qoidalari\n- Imlo lugʻati',
+      text = (
+          '🇺🇿 **Ona tili va Adabiyotdan oʻquv materiallari:**\n\n'
+          'Quyidagi tugma orqali qoʻllanmalarni yuklab oling:'
       )
+      markup = types.InlineKeyboardMarkup()
+      btn = types.InlineKeyboardButton(
+          '📂 Ona tili materiallarini yuklash',
+          url='https://t.me/talim_rasmiy_uz/6',
+      )
+      markup.add(btn)
+      bot.send_message(
+          call.message.chat.id, text, reply_markup=markup, parse_mode='Markdown'
+      )
+
+    # 4. FIZIKA BOSILGANDA (Hozircha havola kiritilmagan bo'lsa)
+    elif call.data == 'physics':
+      text = (
+          '⚡ **Fizika fanidan materiallar:**\n\n'
+          'Hozircha materiallar yuklanmoqda...'
+      )
+      bot.send_message(
+          call.message.chat.id, text, parse_mode='Markdown'
+      )
+
   except Exception as e:
     print(f'Xatolik callback da: {e}')
-
-
-if __name__ == '__main__':
-  t = threading.Thread(target=run_flask)
-  t.daemon = True
-  t.start()
-
-  print('Bot ishga tushdi...')
-  bot.infinity_polling(timeout=10, long_polling_timeout=5)
