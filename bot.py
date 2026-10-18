@@ -7,6 +7,9 @@ from telebot import types
 TOKEN = '8845810892:AAG8-L2XNFkbd177tw9i1GwIsfSjd-S5GQQ'
 bot = telebot.TeleBot(TOKEN)
 
+# Sizning Admin ID raqamingiz kiritildi:
+ADMIN_ID = 6042443325
+
 # Flask server
 app = Flask(__name__)
 
@@ -21,10 +24,32 @@ def run_flask():
   app.run(host='0.0.0.0', port=port)
 
 
+# Foydalanuvchini faylga saqlash funksiyasi
+def save_user(user_id):
+  if not os.path.exists('users.txt'):
+    open('users.txt', 'w').close()
+
+  with open('users.txt', 'r+') as f:
+    users = f.read().splitlines()
+    if str(user_id) not in users:
+      f.write(f'{user_id}\n')
+
+
+# Jami foydalanuvchilar sonini olish
+def get_users_count():
+  if not os.path.exists('users.txt'):
+    return 0
+  with open('users.txt', 'r') as f:
+    users = f.read().splitlines()
+    return len(users)
+
+
 # /start buyrug'i
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
   try:
+    save_user(message.from_user.id)
+
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn_fanlar = types.KeyboardButton('📚 Fanlar')
     btn_sertifikat = types.KeyboardButton('🏅 Milliy Sertifikatlar')
@@ -48,10 +73,28 @@ def send_welcome(message):
     print(f'Xatolik /start da: {e}')
 
 
+# /stat buyrug'i - Faqat Admin uchun statistika
+@bot.message_handler(commands=['stat', 'stats'])
+def show_stats(message):
+  if message.from_user.id == ADMIN_ID:
+    count = get_users_count()
+    bot.send_message(
+        message.chat.id,
+        f'📊 **Bot Statistikasi:**\n\n👤 Jami foydalanuvchilar soni: **{count}**'
+        ' ta',
+        parse_mode='Markdown',
+    )
+  else:
+    bot.send_message(
+        message.chat.id, 'Siz ushbu buyruqdan foydalana olmaysiz.'
+    )
+
+
 # Matnli xabarlarga javob
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
   try:
+    save_user(message.from_user.id)
     text = message.text
 
     if text == '📚 Fanlar':
@@ -102,14 +145,14 @@ def handle_messages(message):
     else:
       bot.send_message(
           message.chat.id,
-          "Tushunmadim. Iltimos, pastdagi tugmalardan birini bosing.",
+          'Tushunmadim. Iltimos, pastdagi tugmalardan birini bosing.',
       )
 
   except Exception as e:
     print(f'Xatolik matnda: {e}')
 
 
-# Inline tugmalar bosilganda
+# Inline tugmalar
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
   try:
@@ -141,11 +184,9 @@ def callback_inline(call):
 
 
 if __name__ == '__main__':
-  # Web serverni ishga tushiramiz
   t = threading.Thread(target=run_flask)
   t.daemon = True
   t.start()
 
-  # Botni cheksiz tsiklda ishlatamiz
   print('Bot ishga tushdi...')
   bot.infinity_polling(timeout=10, long_polling_timeout=5)
